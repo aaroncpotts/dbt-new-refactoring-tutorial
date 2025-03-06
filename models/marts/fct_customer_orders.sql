@@ -14,21 +14,10 @@ orders as (
 
 ),
 
-payments as (
-
-  select * from {{ source('stripe', 'payment') }}
-
+aggregate_payments as (
+    select * from {{ ref('stg_stripe__aggregate_payments') }}
 ),
 -- Logical CTEs
-
-aggregate_payments as (
-    select
-         orderid as order_id,
-         max(created) as payment_finalized_date, 
-         sum(amount) / 100.0 as total_amount_paid
-from payments
-where status <> 'fail'
-group by 1),
 
 paid_orders as 
     (select orders.id as order_id,
@@ -66,10 +55,8 @@ lifetime_value_generate as (
 )
 
 -- Final CTE
--- Simple Select Statment
 
-
-select
+final as (select
     paid_orders.*,
     row_number() over (order by paid_orders.order_id) as transaction_seq,
     row_number() over (partition by customer_id order by paid_orders.order_id) as customer_sales_seq,
@@ -81,4 +68,7 @@ select
     from paid_orders
     left join customer_orders using (customer_id)
     left outer join lifetime_value_generate on lifetime_value_generate.order_id = paid_orders.order_id
-    order by order_id
+    order by order_id)
+-- Simple Select Statment
+
+select * from final
