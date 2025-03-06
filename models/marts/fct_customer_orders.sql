@@ -1,16 +1,18 @@
 with 
 
--- Import CTEs
+
 paid_orders as (
     select * from {{ ref('int_orders') }}
 ),
 
-
-
--- Final CTE
-
 final as (select
-    paid_orders.*,
+    paid_orders.customer_id,
+    paid_orders.order_id,
+    paid_orders.order_placed_at,
+    paid_orders.order_status,
+    paid_orders.payment_finalized_date,
+    paid_orders.customer_first_name,
+    paid_orders.customer_last_name,
     -- sales transaction sequence - for fully paid orders, by order ID
     row_number() over (order by paid_orders.order_id) as transaction_seq,
     --customer sales sequence - partitioned by customer, ordered by order ID
@@ -20,8 +22,8 @@ final as (select
     case
          when (
             rank() over (
-                partition by customer_id
-                order by order_placed_at, order_id
+                partition by paid_orders.customer_id
+                order by paid_orders.order_placed_at, paid_orders.order_id
             ) = 1
         ) then 'new'
     else 'return' end as nvsr,
