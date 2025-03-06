@@ -22,6 +22,7 @@ aggregate_payments as (
 paid_orders as 
     (select orders.id as order_id,
         orders.user_id as customer_id,
+        --order_placed_at used to order the customer_lifetime_value later
         orders.order_date as order_placed_at,
         orders.status as order_status,
         aggregate_payments.total_amount_paid,
@@ -39,35 +40,31 @@ customer_orders
         , max(order_date) as most_recent_order_date
         , count(orders.id) as number_of_orders
     from customers 
-    left join orders  as orders
+    left join orders
     on orders.user_id = customers.id 
     group by 1),
 
-lifetime_value_generate as (
-            select
-            paid_orders.order_id,
-            sum(t2.total_amount_paid) as clv_bad
-        from paid_orders
-        left join paid_orders t2 on paid_orders.customer_id = t2.customer_id and paid_orders.order_id >= t2.order_id
-        group by 1
-        order by paid_orders.order_id
-
-)
 
 -- Final CTE
 
 final as (select
     paid_orders.*,
+    -- sales transaction sequence - for fully paid orders, by order ID
     row_number() over (order by paid_orders.order_id) as transaction_seq,
+    --customer sales sequence - partitioned by customer, ordered by order ID
     row_number() over (partition by customer_id order by paid_orders.order_id) as customer_sales_seq,
     case when customer_orders.first_order_date = paid_orders.order_placed_at
     then 'new'
     else 'return' end as nvsr,
-    lifetime_value_generate.clv_bad as customer_lifetime_value,
+    /*customer lifetime value - sum of total_amount_paid from paid orders, partitioned by customer id
+    then ordered by the order_placed_at value from paid_orders*/
+    sum(total_amount_paid) over(
+        partition by paid_orders.customer_id
+        order by paid_orders.order_placed_at
+        ) as customer_lifetime_value,
     customer_orders.first_order_date as fdos
     from paid_orders
     left join customer_orders using (customer_id)
-    left outer join lifetime_value_generate on lifetime_value_generate.order_id = paid_orders.order_id
     order by order_id)
 -- Simple Select Statment
 
