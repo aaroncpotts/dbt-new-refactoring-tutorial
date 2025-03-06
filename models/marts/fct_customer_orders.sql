@@ -1,37 +1,8 @@
 with 
 
 -- Import CTEs
-
-customers as (
-
-  select * from {{ source('jaffle_shop', 'customers') }}
-
-),
-
-orders as (
-
-  select * from {{ source('jaffle_shop', 'orders') }}
-
-),
-
-aggregate_payments as (
-    select * from {{ ref('stg_stripe__aggregate_payments') }}
-),
--- Logical CTEs
-
-paid_orders as 
-    (select orders.id as order_id,
-        orders.user_id as customer_id,
-        --order_placed_at used to order the customer_lifetime_value and other window functions later
-        orders.order_date as order_placed_at,
-        orders.status as order_status,
-        aggregate_payments.total_amount_paid,
-        aggregate_payments.payment_finalized_date,
-        customers.first_name as customer_first_name,
-        customers.last_name as customer_last_name
-    from orders
-    left join aggregate_payments on orders.id = aggregate_payments.order_id
-    left join customers on orders.user_id = customers.id 
+paid_orders as (
+    select * from {{ ref('int_orders') }}
 ),
 
 
@@ -67,7 +38,8 @@ final as (select
         order by paid_orders.order_placed_at
     ) as fdos
     from paid_orders
-    order by order_id)
+    )
 -- Simple Select Statment
 
 select * from final
+order by order_id
